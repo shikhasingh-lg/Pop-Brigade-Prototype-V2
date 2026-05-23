@@ -167,11 +167,11 @@ func _try_fire() -> void:
 
 func _pick_target() -> Enemy:
 	match hero_class:
-		"FireKnight": return _scan_zone(GameConfig.red_cone_rows,    GameConfig.red_cone_cols,    true)
-		"IceMage":    return _scan_zone(GameConfig.blue_reach_rows,  GameConfig.blue_col_radius,  false)
-		"Archer":     return _scan_column_with_adj_fallback(GameConfig.yellow_reach_rows)
-		"Druid":      return _scan_zone(GameConfig.green_reach_rows, GameConfig.green_col_radius, true)
-		"Wizard":     return _scan_column_with_adj_fallback(GameConfig.purple_reach_rows)
+		"FireKnight": return _scan_zone(GameConfig.red_cone_rows_for_tier(tier),    GameConfig.red_cone_cols_for_tier(tier),    true)
+		"IceMage":    return _scan_zone(GameConfig.blue_reach_rows_for_tier(tier),  GameConfig.blue_col_radius_for_tier(tier),  false)
+		"Archer":     return _scan_zone(GameConfig.yellow_reach_rows_for_tier(tier), GameConfig.yellow_col_radius_for_tier(tier), false)
+		"Druid":      return _scan_zone(GameConfig.green_reach_rows_for_tier(tier), GameConfig.green_col_radius_for_tier(tier), true)
+		"Wizard":     return _scan_zone(GameConfig.purple_reach_rows_for_tier(tier), GameConfig.purple_col_radius_for_tier(tier), false)
 	return null
 
 # Cone/box scan: enemies in lane within ±col_span of hero, lane_progress within
@@ -270,7 +270,7 @@ func _fire_red(target: Enemy) -> void:
 
 func _red_cleave(primary: Enemy) -> void:
 	var max_targets: int = GameConfig.red_cleave_targets
-	var cols: int = GameConfig.red_cone_cols
+	var cols: int = GameConfig.red_cone_cols_for_tier(tier)
 	var cleaved: int = 0
 	for e in enemy_lane.enemies:
 		if cleaved >= max_targets:

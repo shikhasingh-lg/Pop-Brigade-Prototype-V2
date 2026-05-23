@@ -52,6 +52,7 @@ func begin_wave(idx: int) -> void:
 
 func _build_spawn_queue(idx: int) -> Array:
 	var totals: Dictionary = GameConfig.spawn_totals_for_wave(idx)
+	var mix: Dictionary = GameConfig.variant_mix_for_wave(idx)
 	var colors: Array = []
 	for c in totals.keys():
 		for i in range(totals[c]):
@@ -62,8 +63,17 @@ func _build_spawn_queue(idx: int) -> Array:
 	var q: Array = []
 	for i in range(n):
 		var t: float = duration * float(i + 1) / float(n + 1)
-		q.append({"t": t, "color": colors[i]})
+		q.append({"t": t, "color": colors[i], "variant": _pick_variant(mix)})
 	return q
+
+func _pick_variant(mix: Dictionary) -> String:
+	var r: float = _rng.randf()
+	var acc: float = 0.0
+	for v in mix.keys():
+		acc += float(mix[v])
+		if r <= acc:
+			return v
+	return "WALKER"
 
 # ─── Per-frame ─────────────────────────────────────────────────────────────
 
@@ -75,7 +85,7 @@ func _process(dt: float) -> void:
 		# Drip-feed minions every corrupter_minion_spawn_interval_sec, starting
 		# at next_minion_t. Stop when boss dies (wave end handled below).
 		while next_minion_t >= 0.0 and wave_clock >= next_minion_t:
-			_spawn("RED")
+			_spawn("RED", "WALKER")
 			next_minion_t += GameConfig.corrupter_minion_spawn_interval_sec
 		# Wave end: boss is dead.
 		if boss == null or not is_instance_valid(boss) or boss.state == Enemy.State.DEAD:
@@ -83,7 +93,7 @@ func _process(dt: float) -> void:
 			emit_signal("wave_cleared")
 		return
 	while spawn_index < spawn_queue.size() and spawn_queue[spawn_index].t <= wave_clock:
-		_spawn(spawn_queue[spawn_index].color)
+		_spawn(spawn_queue[spawn_index].color, spawn_queue[spawn_index].variant)
 		spawn_index += 1
 	if spawn_index >= spawn_queue.size() and enemies.is_empty():
 		wave_active = false
@@ -112,12 +122,13 @@ func _on_boss_died(_b: Boss) -> void:
 	boss = null
 	next_minion_t = -1.0
 
-func _spawn(color: String) -> void:
+func _spawn(color: String, variant: String = "WALKER") -> void:
 	var col: int = _pick_spawn_column()
 	var e: Enemy = Enemy.new()
 	add_child(e)
 	e.init_enemy({
 		"color": color,
+		"variant": variant,
 		"column": col,
 		"gate": gate_ref,
 		"hero_row": hero_row_ref,

@@ -33,12 +33,13 @@ static func _get_status_sheet() -> Texture2D:
 		_status_sheet = load(STATUS_SHEET_PATH) as Texture2D
 	return _status_sheet
 
-static func _get_texture(color_key: String) -> Texture2D:
-	if _texture_cache.has(color_key):
-		return _texture_cache[color_key]
-	var path := "res://assets/enemies/walker_%s.png" % color_key.to_lower()
+static func _get_texture(variant_key: String, color_key: String) -> Texture2D:
+	var cache_key: String = "%s_%s" % [variant_key, color_key]
+	if _texture_cache.has(cache_key):
+		return _texture_cache[cache_key]
+	var path := "res://assets/enemies/%s_%s.png" % [variant_key.to_lower(), color_key.to_lower()]
 	var tex: Texture2D = load(path)
-	_texture_cache[color_key] = tex
+	_texture_cache[cache_key] = tex
 	return tex
 
 signal reached_cannon(enemy)
@@ -49,6 +50,8 @@ enum State { TELEGRAPH, LANE, ENGAGED, DEAD }
 
 # Identity / stats
 var color: String = "RED"
+var variant: String = "WALKER"
+var variant_scale: float = 1.0
 var hp: float = 50.0
 var max_hp: float = 50.0
 var color_speed_mult: float = 1.0
@@ -84,6 +87,7 @@ var hero_row: HeroRow
 
 func init_enemy(cfg: Dictionary) -> void:
 	color = cfg.color
+	variant = cfg.get("variant", "WALKER")
 	column = cfg.column
 	gate = cfg.gate
 	hero_row = cfg.get("hero_row", null)
@@ -93,14 +97,16 @@ func init_enemy(cfg: Dictionary) -> void:
 	column_x_func = cfg.column_x_func
 
 	var stats: Dictionary = GameConfig.ENEMY_STATS[color]
+	var var_stats: Dictionary = GameConfig.ENEMY_VARIANTS.get(variant, GameConfig.ENEMY_VARIANTS["WALKER"])
 	var w: int = cfg.wave_idx
-	var hp_mult: float = GameConfig.enemy_hp_mult_for_wave(w)
-	var dmg_mult: float = GameConfig.enemy_dmg_mult_for_wave(w)
+	var hp_mult: float = GameConfig.enemy_hp_mult_for_wave(w) * float(var_stats.hp_mult)
+	var dmg_mult: float = GameConfig.enemy_dmg_mult_for_wave(w) * float(var_stats.dmg_mult)
 	max_hp = float(stats.hp) * hp_mult
 	hp = max_hp
-	color_speed_mult = stats.speed
+	color_speed_mult = float(stats.speed) * float(var_stats.speed_mult)
 	color_dmg_base = int(round(stats.dmg_base * dmg_mult))
 	color_dmg_hero = int(round(stats.dmg_hero * dmg_mult))
+	variant_scale = float(var_stats.scale)
 
 	state = State.TELEGRAPH
 	telegraph_timer = GameConfig.spawn_telegraph_sec
@@ -216,13 +222,14 @@ func _set_pos_at_gate() -> void:
 	# Pinned just below the gate base, in the target column, sized small to
 	# convey "this enemy is up there at the far wall" depth-wise.
 	position = Vector2(column_x_func.call(column, 0.0), lane_top_y - 6.0)
-	scale = Vector2(GATE_OVERLAY_SCALE, GATE_OVERLAY_SCALE)
+	var s: float = GATE_OVERLAY_SCALE * variant_scale
+	scale = Vector2(s, s)
 
 func _update_lane_pos() -> void:
 	var y: float = lerp(lane_top_y, lane_bottom_y, lane_progress)
 	var x: float = column_x_func.call(column, lane_progress)
 	position = Vector2(x, y)
-	var s: float = lerp(MIN_LANE_SCALE, 1.0, lane_progress)
+	var s: float = lerp(MIN_LANE_SCALE, 1.0, lane_progress) * variant_scale
 	scale = Vector2(s, s)
 
 # ─── Transitions ───────────────────────────────────────────────────────────
@@ -251,7 +258,7 @@ func _on_reach_hero_row() -> void:
 		var park_y: float = lane_bottom_y - ENGAGE_STANDOFF_PX
 		lane_progress = inverse_lerp(lane_top_y, lane_bottom_y, park_y)
 		position = Vector2(column_x_func.call(column, lane_progress), park_y)
-		scale = Vector2.ONE
+		scale = Vector2(variant_scale, variant_scale)
 		z_index = 5   # in front of the lane but behind heroes
 		return
 	emit_signal("reached_cannon", self)
@@ -294,7 +301,7 @@ func _draw() -> void:
 	var dim: float = lerp(0.55, 1.0, depth_t)
 	var tinted: Color = Color(fill.r * dim, fill.g * dim, fill.b * dim, fill.a)
 
-	var tex: Texture2D = _get_texture(color)
+	var tex: Texture2D = _get_texture(variant, color)
 	var draw_rect2 := Rect2(-SPRITE_DRAW_SIZE * 0.5, -SPRITE_DRAW_SIZE * 0.5, SPRITE_DRAW_SIZE, SPRITE_DRAW_SIZE)
 
 	if state == State.TELEGRAPH:

@@ -116,15 +116,17 @@ func _hero_class_for_color(c: String) -> String:
 		_:        return "FireKnight"
 
 func _palette_for_wave(w: int) -> Array[String]:
-	# Deviates from spec §5.3 ("wave 1 = RED-heavy") — pure red-heavy seeded
-	# one giant connected group that a single 3-match wiped in playtest. Three
-	# colors from wave 1 keeps the cluster fragmented and the choice meaningful.
-	var p: Array[String] = []
-	match w:
-		0: p = ["RED", "RED", "BLUE", "BLUE", "YELLOW"]  # 40/40/20 — red-lean, tri
-		1: p = ["RED", "BLUE", "YELLOW"]                  # even tri
-		2: p = ["RED", "BLUE", "YELLOW"]
-		_: p = ["RED", "BLUE", "YELLOW"]
+	# Stage-gated unlock: stage 1 = RBY (3 colors), stage 2 adds GREEN, stage 3+ adds PURPLE.
+	# Wave 0 doubles RED/BLUE so the opening seed stays fragmented (avoids one
+	# giant connected group that a single 3-match wipes — spec §5.3).
+	var p: Array[String] = ["RED", "BLUE", "YELLOW"]
+	if MetaState.current_stage >= 2:
+		p.append("GREEN")
+	if MetaState.current_stage >= 3:
+		p.append("PURPLE")
+	if w == 0:
+		p.append("RED")
+		p.append("BLUE")
 	return p
 
 func _spawn_bubble(cell: Vector2i, color: String, hero: bool, hero_class: String = "") -> Bubble:
