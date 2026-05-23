@@ -9,7 +9,7 @@ const SPRITE_DRAW_SIZE: float = 149.76  # 1.56× original — chibi portrait dra
 # Global visibility multiplier for hero-attack projectiles (arrow, streaks,
 # wedges, slash). Bumped from 1.0 → 1.9 so projectiles read on a 720-wide
 # mobile viewport instead of looking like hairlines. Tune here.
-const PROJECTILE_SCALE: float = 1.9
+const PROJECTILE_SCALE: float = 1.1
 
 const CLASS_COLOR: Dictionary = {
 	"FireKnight": "RED",
@@ -632,24 +632,29 @@ func _make_arrow(length: float, col: Color) -> Node2D:
 	# scales the whole arrow proportionally.
 	var holder := Node2D.new()
 	var half_len: float = length * 0.5
-	var shaft_h: float = 3.4               # was 1.6
-	var head_back: float = 12.0            # was 7.0
-	var head_h: float = 7.5                # was 4.0
-	var fletch_back: float = 11.0          # was 6.0
-	var fletch_h: float = 7.5              # was 4.0
+	# Proportional to length so the silhouette stays arrow-shaped at any
+	# PROJECTILE_SCALE. Ratios match v1 (shaft 12% tall, head 27% long × 31%
+	# tall, fletching 23% back × 31% tall).
+	var shaft_h: float = length * 0.060
+	var head_back: float = length * 0.270
+	var head_h: float = length * 0.155
+	var fletch_back: float = length * 0.230
+	var fletch_h: float = length * 0.155
 
-	# Dark silhouette behind shaft + head — gives a 1-2px halo of black on every
-	# edge so it pops over green grass, blue gate, etc.
+	# Dark silhouette behind the full arrow shape — traces the actual outline
+	# (rect shaft → triangle head) so the silhouette itself reads as an arrow.
 	var outline := Polygon2D.new()
 	outline.color = Color(0.05, 0.04, 0.08, 0.85)
 	var ol: float = 1.6
+	var head_join_x: float = half_len - head_back
 	outline.polygon = PackedVector2Array([
-		Vector2(-half_len - ol, -shaft_h - ol),
-		Vector2(half_len - head_back, -shaft_h - ol),
-		Vector2(half_len + ol, -head_h - ol),
-		Vector2(half_len + ol,  head_h + ol),
-		Vector2(half_len - head_back,  shaft_h + ol),
-		Vector2(-half_len - ol,  shaft_h + ol),
+		Vector2(-half_len - ol,    -shaft_h - ol),        # back-top corner of shaft
+		Vector2(head_join_x - ol,  -shaft_h - ol),        # shaft-to-head top junction
+		Vector2(head_join_x - ol,  -head_h - ol),         # top corner of head base
+		Vector2(half_len + ol,      0),                   # head tip
+		Vector2(head_join_x - ol,   head_h + ol),         # bottom corner of head base
+		Vector2(head_join_x - ol,   shaft_h + ol),        # shaft-to-head bottom junction
+		Vector2(-half_len - ol,     shaft_h + ol),        # back-bottom corner of shaft
 	])
 	holder.add_child(outline)
 
