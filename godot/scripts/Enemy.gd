@@ -75,6 +75,9 @@ var column_x_func: Callable
 
 var engage_dps_accum: float = 0.0
 
+# Hit-feel: per-hit white flash counter (ticks down in _process).
+var _hit_flash_t: float = 0.0
+
 # Refs
 var gate: Gate
 var hero_row: HeroRow
@@ -104,11 +107,20 @@ func init_enemy(cfg: Dictionary) -> void:
 	z_index = 1   # always in front of gate so telegraph + walk read clearly
 	_set_pos_at_gate()
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, opts: Dictionary = {}) -> void:
 	if state == State.DEAD:
 		return
 	hp -= amount
 	queue_redraw()
+	# Per-hit polish — skipped for silent (DoT, status ticks) damage so it
+	# doesn't fire every second from burn/poison.
+	var silent: bool = bool(opts.get("silent", false))
+	if not silent:
+		_hit_flash_t = GameConfig.hit_flash_duration_sec
+		var crit: bool = bool(opts.get("crit", false))
+		var num_pos: Vector2 = global_position + Vector2(0.0, -SIZE * 0.6 * scale.y)
+		VFX.spawn_damage_number(num_pos, amount, crit)
+		VFX.hit_freeze()
 	if hp <= 0.0:
 		_die()
 
@@ -155,7 +167,7 @@ func _tick_statuses(dt: float) -> void:
 			changed = true
 		i -= 1
 	if dot_dmg > 0.0:
-		take_damage(dot_dmg)
+		take_damage(dot_dmg, {"silent": true})
 	if changed:
 		queue_redraw()
 
@@ -173,6 +185,9 @@ func effective_speed_mult() -> float:
 
 func _process(dt: float) -> void:
 	_tick_statuses(dt)
+	if _hit_flash_t > 0.0:
+		_hit_flash_t = max(0.0, _hit_flash_t - dt)
+		queue_redraw()
 	if state == State.DEAD:
 		return
 	var spd_mult: float = effective_speed_mult()
@@ -295,6 +310,11 @@ func _draw() -> void:
 	_draw_ground_shadow(1.0)
 	if tex != null:
 		draw_texture_rect(tex, draw_rect2, false, Color(dim, dim, dim, 1.0))
+		# Hit-flash: redraw the sprite as pure white over the top with alpha
+		# falling from 1→0 across hit_flash_duration_sec.
+		if _hit_flash_t > 0.0:
+			var flash_a: float = clamp(_hit_flash_t / GameConfig.hit_flash_duration_sec, 0.0, 1.0)
+			draw_texture_rect(tex, draw_rect2, false, Color(1.0, 1.0, 1.0, flash_a))
 	else:
 		draw_rect(Rect2(-SIZE, -SIZE, SIZE * 2, SIZE * 2), tinted)
 

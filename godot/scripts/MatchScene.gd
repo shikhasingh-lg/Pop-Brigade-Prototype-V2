@@ -11,8 +11,8 @@ extends Node2D
 ## of the gate stretching toward the camera; heroes near the bottom; cannon at
 ## the player POV. Enemies materialize at the gate base, then emerge into the
 ## lane and walk DOWN toward the camera (growing in scale).
-const GATE_TOP_PCT: float = 0.08   # pushed down so bubbles clear the top HUD chip row
-const LANE_TOP_PCT: float = 0.20      # narrower + deeper lane: pulled up for depth
+const GATE_TOP_PCT: float = 0.042  # bubble top edge ≈ y=62, flush with HUD chip bottom (no gap)
+const LANE_TOP_PCT: float = 0.32      # shortened lane (0.32→0.78 = 16/20 of prior 0.20→0.78 span)
 const LANE_BOTTOM_PCT: float = 0.78   # = hero row top, pushed down for depth
 const HERO_ROW_TOP_PCT: float = 0.78
 const CANNON_Y_PCT: float = 0.92

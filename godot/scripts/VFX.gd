@@ -49,6 +49,7 @@ const COLOR_TO_CLASS: Dictionary = {
 static var _sprite_cache: Dictionary = {}
 
 var _layer: CanvasLayer
+var _freeze_active: bool = false
 
 func _ready() -> void:
 	# Float above gameplay nodes but below UI. CanvasLayer.layer = 5
@@ -57,6 +58,62 @@ func _ready() -> void:
 	_layer.layer = 5
 	_layer.name = "VFXLayer"
 	add_child(_layer)
+	# Process during time-scale freeze so the recovery timer can fire.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+# ─── Hit-feel API ──────────────────────────────────────────────────────────
+
+# Floating damage number. Rises and fades over GameConfig.dmg_number_lifetime_sec.
+# `crit=true` → larger, gold instead of white.
+func spawn_damage_number(world_pos: Vector2, amount: float, crit: bool = false) -> void:
+	var rounded: int = int(round(amount))
+	if rounded <= 0:
+		return
+	var n := Node2D.new()
+	n.position = world_pos + Vector2(randf_range(-10.0, 10.0), 0.0)
+	_layer.add_child(n)
+	var lbl := Label.new()
+	lbl.text = str(rounded)
+	var fs: int = GameConfig.dmg_number_crit_font_size if crit else GameConfig.dmg_number_font_size
+	lbl.add_theme_font_size_override("font_size", fs)
+	lbl.add_theme_color_override("font_color",
+		Color(1.0, 0.85, 0.25) if crit else Color(1.0, 1.0, 1.0))
+	lbl.add_theme_constant_override("outline_size", 5)
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.size = Vector2(90.0, 40.0)
+	lbl.position = -lbl.size * 0.5
+	n.add_child(lbl)
+	var life: float = GameConfig.dmg_number_lifetime_sec
+	var rise: float = GameConfig.dmg_number_rise_px
+	# A short pop-in scale on crit only — keeps non-crit hits visually cheap.
+	if crit:
+		n.scale = Vector2(0.6, 0.6)
+		n.create_tween().tween_property(n, "scale", Vector2(1.0, 1.0), 0.10) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var tw := n.create_tween().set_parallel(true)
+	tw.tween_property(n, "position:y", n.position.y - rise, life) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, life * 0.55).set_delay(life * 0.30)
+	tw.chain().tween_callback(n.queue_free)
+
+# Brief stutter — drops Engine.time_scale for `duration` real-time seconds.
+# Re-entrant calls during an active freeze are ignored.
+func hit_freeze(duration: float = -1.0) -> void:
+	if _freeze_active:
+		return
+	if duration < 0.0:
+		duration = GameConfig.hit_freeze_duration_sec
+	_freeze_active = true
+	Engine.time_scale = GameConfig.hit_freeze_time_scale
+	# process_always = true, ignore_time_scale = true → fires in real time.
+	var t := get_tree().create_timer(duration, true, false, true)
+	t.timeout.connect(_end_freeze)
+
+func _end_freeze() -> void:
+	Engine.time_scale = 1.0
+	_freeze_active = false
 
 # ─── Public API ────────────────────────────────────────────────────────────
 

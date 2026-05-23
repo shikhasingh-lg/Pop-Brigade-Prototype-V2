@@ -47,7 +47,7 @@ func enemy_dmg_mult_for_wave(idx: int) -> float:
 	return enemy_dmg_mult_per_wave[clamp(idx, 0, enemy_dmg_mult_per_wave.size() - 1)]
 
 # ─── Enemy lane ─────────────────────────────────────────────────────
-@export var enemy_lane_cells: int = 20
+@export var enemy_lane_cells: int = 16
 @export var enemy_base_damage: int = 20
 @export var enemy_hero_damage: int = 10
 @export var spawn_telegraph_sec: float = 1.5
@@ -80,6 +80,21 @@ const ENEMY_STATS: Dictionary = {
 # ─── Cannon ─────────────────────────────────────────────────────────
 @export var cannon_reload_cooldown_sec: float = 0.2
 
+# ─── Hit feel (per-hit polish on enemies) ───────────────────────────
+# Tiny "freeze frame" stutter when a hit lands. Time scale dips to
+# hit_freeze_time_scale for hit_freeze_duration_sec real-time seconds.
+# Re-entrant calls during an active freeze are ignored so the rate is
+# bounded even at peak fire density.
+@export var hit_freeze_duration_sec: float = 0.035
+@export var hit_freeze_time_scale: float = 0.05
+# White-flash overlay drawn on top of the enemy sprite, alpha fades from 1→0.
+@export var hit_flash_duration_sec: float = 0.09
+# Floating damage number — vertical rise + fade.
+@export var dmg_number_rise_px: float = 46.0
+@export var dmg_number_lifetime_sec: float = 0.70
+@export var dmg_number_font_size: int = 26
+@export var dmg_number_crit_font_size: int = 34
+
 # ─── Hero classes ───────────────────────────────────────────────────
 # Hero lineup per stage is driven by MetaState.STAGE_LINEUP, not a static enable list.
 
@@ -111,7 +126,7 @@ const ENEMY_STATS: Dictionary = {
 # Archer (YELLOW) — straight column snipe + execute bonus.
 @export var yellow_fire_rate_sec: float = 0.8
 @export var yellow_dmg_mult: float = 1.4
-@export var yellow_reach_rows: int = 10                # → lane_progress >= 0.50
+@export var yellow_reach_rows: int = 16                # full lane (0–16) per combat-design §1
 @export var yellow_execute_threshold: float = 0.30
 @export var yellow_execute_bonus: float = 0.50
 

@@ -6,6 +6,11 @@ class_name Hero
 const SIZE: float = 40.56         # 1.56× original (1.2 × 1.3) — keeps pips in proportion
 const SPRITE_DRAW_SIZE: float = 149.76  # 1.56× original — chibi portrait drawn larger than collision box
 
+# Global visibility multiplier for hero-attack projectiles (arrow, streaks,
+# wedges, slash). Bumped from 1.0 → 1.9 so projectiles read on a 720-wide
+# mobile viewport instead of looking like hairlines. Tune here.
+const PROJECTILE_SCALE: float = 1.9
+
 const CLASS_COLOR: Dictionary = {
 	"FireKnight": "RED",
 	"IceMage":    "BLUE",
@@ -391,11 +396,15 @@ func _vfx_slash(dir: Vector2, reach: float, col: Color) -> void:
 	var holder := Node2D.new()
 	add_child(holder)
 	holder.rotation = dir.angle() - deg_to_rad(35.0)
-	var outer := _make_crescent(reach, 18.0, deg_to_rad(70.0),
-		Color(col.r, col.g, col.b, col.a * 0.85))
+	# Outline ring under the crescent for contrast against grass/sky backdrops.
+	var outline := _make_crescent(reach, 18.0 * PROJECTILE_SCALE + 4.0,
+		deg_to_rad(72.0), Color(0.05, 0.04, 0.08, 0.55))
+	holder.add_child(outline)
+	var outer := _make_crescent(reach, 18.0 * PROJECTILE_SCALE, deg_to_rad(70.0),
+		Color(col.r, col.g, col.b, col.a * 0.92))
 	holder.add_child(outer)
-	var inner := _make_crescent(reach * 0.92, 8.0, deg_to_rad(55.0),
-		Color(1.0, 0.95, 0.78, 0.95))
+	var inner := _make_crescent(reach * 0.92, 8.0 * PROJECTILE_SCALE,
+		deg_to_rad(55.0), Color(1.0, 0.97, 0.82, 0.98))
 	holder.add_child(inner)
 	var tw := holder.create_tween()
 	tw.tween_property(holder, "rotation", dir.angle() + deg_to_rad(35.0), 0.14) \
@@ -583,7 +592,8 @@ func _vfx_arrow(impact_world: Vector2, is_execute: bool) -> void:
 	if enemy_lane == null:
 		return
 	var arrow_color := Color(1.0, 0.95, 0.55, 1.0) if is_execute else Color(1.0, 0.85, 0.20, 1.0)
-	var arrow := _make_arrow(32.0 if is_execute else 26.0, arrow_color)
+	var base_len: float = (32.0 if is_execute else 26.0) * PROJECTILE_SCALE
+	var arrow := _make_arrow(base_len, arrow_color)
 	arrow.z_index = 75
 	enemy_lane.add_child(arrow)
 	var p0: Vector2 = enemy_lane.to_local(global_position)
@@ -612,38 +622,74 @@ func _vfx_arrow(impact_world: Vector2, is_execute: bool) -> void:
 			10 if is_execute else 6, 44.0 if is_execute else 32.0))
 
 func _make_arrow(length: float, col: Color) -> Node2D:
+	# Sized for legibility on a 720-wide mobile viewport. Layers (back→front):
+	#   1. Dark outline silhouette for contrast against any background.
+	#   2. Soft halo glow in the arrow color, larger than the head.
+	#   3. Shaft (wood).
+	#   4. Head (bright steel).
+	#   5. Fletching (color-tinted feathers).
+	# All inner dimensions track `length` so the existing PROJECTILE_SCALE knob
+	# scales the whole arrow proportionally.
 	var holder := Node2D.new()
 	var half_len: float = length * 0.5
-	var shaft := Polygon2D.new()
-	shaft.color = Color(0.28, 0.20, 0.12, 1.0)
-	shaft.polygon = PackedVector2Array([
-		Vector2(-half_len, -1.6), Vector2(half_len - 4.0, -1.6),
-		Vector2(half_len - 4.0, 1.6), Vector2(-half_len, 1.6),
+	var shaft_h: float = 3.4               # was 1.6
+	var head_back: float = 12.0            # was 7.0
+	var head_h: float = 7.5                # was 4.0
+	var fletch_back: float = 11.0          # was 6.0
+	var fletch_h: float = 7.5              # was 4.0
+
+	# Dark silhouette behind shaft + head — gives a 1-2px halo of black on every
+	# edge so it pops over green grass, blue gate, etc.
+	var outline := Polygon2D.new()
+	outline.color = Color(0.05, 0.04, 0.08, 0.85)
+	var ol: float = 1.6
+	outline.polygon = PackedVector2Array([
+		Vector2(-half_len - ol, -shaft_h - ol),
+		Vector2(half_len - head_back, -shaft_h - ol),
+		Vector2(half_len + ol, -head_h - ol),
+		Vector2(half_len + ol,  head_h + ol),
+		Vector2(half_len - head_back,  shaft_h + ol),
+		Vector2(-half_len - ol,  shaft_h + ol),
 	])
-	holder.add_child(shaft)
+	holder.add_child(outline)
+
+	# Glow halo — wider than the head, semi-transparent, in arrow color.
 	var glow := Polygon2D.new()
-	glow.color = Color(col.r, col.g, col.b, 0.6)
+	glow.color = Color(col.r, col.g, col.b, 0.55)
 	glow.polygon = PackedVector2Array([
-		Vector2(half_len + 2.0, 0),
-		Vector2(half_len - 9.0, -6.0),
-		Vector2(half_len - 9.0, 6.0),
+		Vector2(half_len + 6.0, 0),
+		Vector2(half_len - head_back - 4.0, -head_h - 4.0),
+		Vector2(half_len - head_back - 4.0,  head_h + 4.0),
 	])
 	holder.add_child(glow)
+
+	# Shaft.
+	var shaft := Polygon2D.new()
+	shaft.color = Color(0.32, 0.22, 0.13, 1.0)
+	shaft.polygon = PackedVector2Array([
+		Vector2(-half_len, -shaft_h), Vector2(half_len - head_back, -shaft_h),
+		Vector2(half_len - head_back,  shaft_h), Vector2(-half_len,  shaft_h),
+	])
+	holder.add_child(shaft)
+
+	# Bright steel head.
 	var head := Polygon2D.new()
-	head.color = Color(0.92, 0.92, 0.95, 1.0)
+	head.color = Color(1.0, 0.98, 0.86, 1.0)
 	head.polygon = PackedVector2Array([
 		Vector2(half_len, 0),
-		Vector2(half_len - 7.0, -4.0),
-		Vector2(half_len - 7.0, 4.0),
+		Vector2(half_len - head_back, -head_h),
+		Vector2(half_len - head_back,  head_h),
 	])
 	holder.add_child(head)
+
+	# Fletching (one each side, tinted in arrow color).
 	for sign_y in [-1.0, 1.0]:
 		var fl := Polygon2D.new()
 		fl.color = col
 		fl.polygon = PackedVector2Array([
 			Vector2(-half_len, 0),
-			Vector2(-half_len + 6.0, 0),
-			Vector2(-half_len + 2.0, 4.0 * sign_y),
+			Vector2(-half_len + fletch_back, 0),
+			Vector2(-half_len + 3.0, fletch_h * sign_y),
 		])
 		holder.add_child(fl)
 	return holder
@@ -651,19 +697,25 @@ func _make_arrow(length: float, col: Color) -> Node2D:
 func _spawn_arrow_streak(world_pos: Vector2, dir: Vector2, col: Color) -> void:
 	if enemy_lane == null:
 		return
+	# Tapered trail: thick + bright at the head, fading to a point behind it.
+	# 4-vertex quad with two different heights so the eye reads a streak rather
+	# than a thin rectangle.
+	var len_px: float = 22.0 * PROJECTILE_SCALE
+	var h_front: float = 4.2 * PROJECTILE_SCALE
+	var h_back: float = 0.6 * PROJECTILE_SCALE
 	var streak := Polygon2D.new()
-	streak.color = Color(col.r, col.g, col.b, 0.55)
+	streak.color = Color(col.r, col.g, col.b, 0.85)
 	streak.polygon = PackedVector2Array([
-		Vector2(-10.0, -1.2), Vector2(0, -1.2),
-		Vector2(0, 1.2), Vector2(-10.0, 1.2),
+		Vector2(-len_px, -h_back), Vector2(0, -h_front),
+		Vector2(0,  h_front), Vector2(-len_px,  h_back),
 	])
 	streak.rotation = dir.angle()
 	streak.z_index = 60
 	enemy_lane.add_child(streak)
 	streak.position = enemy_lane.to_local(world_pos)
 	var tw := streak.create_tween()
-	tw.tween_property(streak, "modulate:a", 0.0, 0.18)
-	tw.parallel().tween_property(streak, "scale", Vector2(0.3, 0.3), 0.18)
+	tw.tween_property(streak, "modulate:a", 0.0, 0.22)
+	tw.parallel().tween_property(streak, "scale", Vector2(0.35, 0.35), 0.22)
 	tw.tween_callback(func():
 		if is_instance_valid(streak): streak.queue_free())
 
