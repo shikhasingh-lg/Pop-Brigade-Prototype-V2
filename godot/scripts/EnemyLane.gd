@@ -51,13 +51,13 @@ func begin_wave(idx: int) -> void:
 	wave_active = true
 
 func _build_spawn_queue(idx: int) -> Array:
-	var totals: Dictionary = GameConfig.SPAWN_TOTALS[idx]
+	var totals: Dictionary = GameConfig.spawn_totals_for_wave(idx)
 	var colors: Array = []
 	for c in totals.keys():
 		for i in range(totals[c]):
 			colors.append(c)
 	colors.shuffle()
-	var duration: float = GameConfig.wave_duration_sec[idx]
+	var duration: float = GameConfig.wave_duration_for_wave(idx)
 	var n: int = colors.size()
 	var q: Array = []
 	for i in range(n):

@@ -73,18 +73,30 @@ func fade_clear_all() -> void:
 
 func seed_wave(wave_idx: int) -> void:
 	clear_all()
-	var rows: int = GameConfig.gate_seed_rows_per_wave[wave_idx]
+	var rows: int = GameConfig.seed_rows_for_wave(wave_idx)
 	var palette: Array[String] = _palette_for_wave(wave_idx)
 	var all_cells: Array[Vector2i] = []
 	for r in range(rows):
 		for c in range(GameConfig.gate_columns):
 			all_cells.append(Vector2i(c, r))
-	# Pick N hero cells from the seeded area.
+	# Pick N hero cells from the seeded area. Guarantee at least ONE hero bubble
+	# lands in the bottom seed row (row = rows-1) — that's the row closest to the
+	# cannon, so the first hero is always reachable within a couple of shots and
+	# the player isn't starved of defense at wave start.
 	all_cells.shuffle()
 	var hero_count: int = min(GameConfig.hero_bubble_count_for_wave(wave_idx), all_cells.size())
 	var hero_set: Dictionary = {}
-	for i in range(hero_count):
-		hero_set[all_cells[i]] = true
+	if hero_count > 0:
+		var bottom_cells: Array[Vector2i] = []
+		for c in range(GameConfig.gate_columns):
+			bottom_cells.append(Vector2i(c, rows - 1))
+		bottom_cells.shuffle()
+		hero_set[bottom_cells[0]] = true
+	for cell in all_cells:
+		if hero_set.size() >= hero_count:
+			break
+		if not hero_set.has(cell):
+			hero_set[cell] = true
 	for cell in all_cells:
 		var col: String = palette[_rng.randi() % palette.size()]
 		var is_h: bool = hero_set.has(cell)

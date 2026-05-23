@@ -91,8 +91,8 @@ func init_enemy(cfg: Dictionary) -> void:
 
 	var stats: Dictionary = GameConfig.ENEMY_STATS[color]
 	var w: int = cfg.wave_idx
-	var hp_mult: float = GameConfig.enemy_hp_mult_per_wave[w]
-	var dmg_mult: float = GameConfig.enemy_dmg_mult_per_wave[w]
+	var hp_mult: float = GameConfig.enemy_hp_mult_for_wave(w)
+	var dmg_mult: float = GameConfig.enemy_dmg_mult_for_wave(w)
 	max_hp = float(stats.hp) * hp_mult
 	hp = max_hp
 	color_speed_mult = stats.speed

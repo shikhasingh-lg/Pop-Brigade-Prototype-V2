@@ -299,7 +299,8 @@ func _render_lineup(parent: Node2D, size: Vector2) -> void:
 	power_lbl.size = Vector2(200, 30)
 	parent.add_child(power_lbl)
 
-	# 5 slots: leftmost slot LOCKED when stage < 10, then up to 4 heroes.
+	# 5 slots. Heroes fill left→right from the stage's lineup; remaining slots
+	# show as LOCKED. So stage 1 (3 heroes) shows 3 unlocked + 2 locked, etc.
 	var slot_count: int = 5
 	var slot_w: float = (size.x - 10.0 * (slot_count - 1)) / float(slot_count)
 	var slot_h: float = size.y - 50.0
@@ -311,8 +312,7 @@ func _render_lineup(parent: Node2D, size: Vector2) -> void:
 		var slot_holder: Node2D = UI.make_chip(Vector2(sx, slot_y),
 			Vector2(slot_w, slot_h), Color(0.30, 0.42, 0.48))
 		parent.add_child(slot_holder)
-		# First slot is locked (mirrors reference image).
-		var slot_locked: bool = (i == 0) or is_locked_stage
+		var slot_locked: bool = is_locked_stage or i >= lineup.size()
 		if slot_locked:
 			var dim := Polygon2D.new()
 			dim.color = Color(0.10, 0.13, 0.20, 0.85)
@@ -327,8 +327,7 @@ func _render_lineup(parent: Node2D, size: Vector2) -> void:
 			lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			slot_holder.add_child(lock_icon)
 		else:
-			# Resolve a hero from the stage lineup if available.
-			var hero_idx: int = i - 1   # since slot 0 is locked
+			var hero_idx: int = i
 			if hero_idx < lineup.size():
 				var entry: Array = lineup[hero_idx]
 				var hero_id: String = entry[0]

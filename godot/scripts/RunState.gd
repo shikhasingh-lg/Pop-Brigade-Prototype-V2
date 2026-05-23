@@ -17,6 +17,10 @@ var intermission_active: bool = false
 var run_over: bool = false
 
 func start_run() -> void:
+	# Pull the wave count for whichever stage was selected. Falls back to
+	# GameConfig.num_waves if no stage is set (e.g. direct MatchScene launch).
+	if MetaState.current_stage > 0:
+		GameConfig.num_waves = MetaState.waves_for_stage(MetaState.current_stage)
 	wave_index = 0
 	base_hp = GameConfig.base_max_hp
 	heroes_alive = 0
@@ -27,7 +31,7 @@ func start_run() -> void:
 
 func _begin_wave(idx: int) -> void:
 	wave_index = idx
-	moves_remaining = GameConfig.moves_per_wave[idx]
+	moves_remaining = GameConfig.moves_for_wave(idx)
 	intermission_active = false
 	emit_signal("intermission_ended")
 	emit_signal("wave_changed", idx)

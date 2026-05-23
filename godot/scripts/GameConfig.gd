@@ -9,9 +9,12 @@ extends Node
 @export var bubble_cell_px: int = 60
 
 # ─── Wave structure ─────────────────────────────────────────────────
+# num_waves is set per-match at run start from MetaState.waves_for_stage(stage).
+# Default mirrors stage 1 so a direct MatchScene launch still works.
 @export var num_waves: int = 5
 @export var moves_per_wave: Array[int] = [10, 6, 6, 6, 6]
 @export var intermission_duration_sec: float = 5.0
+@export var pre_run_countdown_sec: float = 10.0   # Wave 1 "Get Ready" — longer than intermission to let player plan
 
 @export var gate_seed_rows_per_wave: Array[int] = [4, 5, 6, 7, 8]
 # Explicit per-wave hero count — capped at 3, decreasing curve so later waves
@@ -19,7 +22,29 @@ extends Node
 @export var hero_bubbles_per_wave: Array[int] = [3, 3, 2, 2, 2]
 
 func hero_bubble_count_for_wave(wave_idx: int) -> int:
-	return clamp(hero_bubbles_per_wave[wave_idx], 0, 3)
+	var i: int = clamp(wave_idx, 0, hero_bubbles_per_wave.size() - 1)
+	return clamp(hero_bubbles_per_wave[i], 0, 3)
+
+# Safe per-wave accessors. Stages 3-5 run 10-16 waves but the tuning arrays
+# below are length 5 — past the end we hold at the last entry until per-wave
+# content is authored.
+func moves_for_wave(idx: int) -> int:
+	return moves_per_wave[clamp(idx, 0, moves_per_wave.size() - 1)]
+
+func seed_rows_for_wave(idx: int) -> int:
+	return gate_seed_rows_per_wave[clamp(idx, 0, gate_seed_rows_per_wave.size() - 1)]
+
+func wave_duration_for_wave(idx: int) -> float:
+	return wave_duration_sec[clamp(idx, 0, wave_duration_sec.size() - 1)]
+
+func spawn_totals_for_wave(idx: int) -> Dictionary:
+	return SPAWN_TOTALS[clamp(idx, 0, SPAWN_TOTALS.size() - 1)]
+
+func enemy_hp_mult_for_wave(idx: int) -> float:
+	return enemy_hp_mult_per_wave[clamp(idx, 0, enemy_hp_mult_per_wave.size() - 1)]
+
+func enemy_dmg_mult_for_wave(idx: int) -> float:
+	return enemy_dmg_mult_per_wave[clamp(idx, 0, enemy_dmg_mult_per_wave.size() - 1)]
 
 # ─── Enemy lane ─────────────────────────────────────────────────────
 @export var enemy_lane_cells: int = 20

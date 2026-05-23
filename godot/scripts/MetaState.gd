@@ -8,8 +8,8 @@ extends Node
 ## Not persisted to disk in v2 — this is the prototype loop. Add ResourceSaver
 ## hooks before soft launch.
 
-const TOTAL_STAGES: int = 30
-const BOSS_STAGE: int = 30
+const TOTAL_STAGES: int = 5
+const BOSS_STAGE: int = 5
 const MAX_ENERGY: int = 10
 const STAGE_ENERGY_COST: int = 1
 
@@ -54,31 +54,33 @@ var last_run_revive_used: bool = false
 # Best wave reached per stage (1-indexed). 0 = never played.
 var best_wave_per_stage: Dictionary = {}
 
-# Stage roster — heroes available in each stage (placeholder data). Each entry
-# is a list of {hero_class, color} dicts for the lineup chips on Stage Select.
+# Stage roster — heroes available in each stage. Prototype unlock curve:
+# stage 1 = 3 heroes, stage 2 = 4 heroes, stages 3-5 = full 5-hero roster.
 const STAGE_LINEUP: Array = [
-	# Stages 1-5
-	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)]],
+	# Stage 1 — 3 heroes (FK, AR, IM)
 	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)]],
-	[["FK", Color(0.95, 0.42, 0.36)], ["IM", Color(0.36, 0.74, 0.98)]],
-	[["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)]],
-	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)]],
+	# Stage 2 — 4 heroes (+ DR)
+	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)], ["DR", Color(0.78, 0.62, 0.36)]],
+	# Stage 3 — full 5-hero roster (+ WZ)
+	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)], ["DR", Color(0.78, 0.62, 0.36)], ["WZ", Color(0.86, 0.46, 0.96)]],
+	# Stage 4 — full roster
+	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)], ["DR", Color(0.78, 0.62, 0.36)], ["WZ", Color(0.86, 0.46, 0.96)]],
+	# Stage 5 — boss, full roster
+	[["FK", Color(0.95, 0.42, 0.36)], ["AR", Color(0.45, 0.78, 0.40)], ["IM", Color(0.36, 0.74, 0.98)], ["DR", Color(0.78, 0.62, 0.36)], ["WZ", Color(0.86, 0.46, 0.96)]],
 ]
 
+# Wave count per stage (prototype): 5 → 7 → 10 → 13 → 16.
+const WAVES_PER_STAGE: Array[int] = [5, 7, 10, 13, 16]
+
 func lineup_for_stage(stage: int) -> Array:
-	# Cycle through the lineup pool — production would have a real per-stage table.
 	if STAGE_LINEUP.is_empty():
 		return []
-	# Higher stages get the full 5-hero roster.
-	if stage >= 10:
-		return [
-			["FK", Color(0.95, 0.42, 0.36)],
-			["AR", Color(0.45, 0.78, 0.40)],
-			["IM", Color(0.36, 0.74, 0.98)],
-			["DR", Color(0.78, 0.62, 0.36)],
-			["WZ", Color(0.86, 0.46, 0.96)],
-		]
-	return STAGE_LINEUP[(stage - 1) % STAGE_LINEUP.size()]
+	var idx: int = clamp(stage - 1, 0, STAGE_LINEUP.size() - 1)
+	return STAGE_LINEUP[idx]
+
+func waves_for_stage(stage: int) -> int:
+	var idx: int = clamp(stage - 1, 0, WAVES_PER_STAGE.size() - 1)
+	return WAVES_PER_STAGE[idx]
 
 func best_wave_for_stage(stage: int) -> int:
 	return int(best_wave_per_stage.get(stage, 0))
@@ -89,12 +91,7 @@ func record_best_wave(stage: int, wave: int) -> void:
 
 # Stage names for the world 1 path. Index 0 = stage 1.
 const STAGE_NAMES: Array[String] = [
-	"Sunny Meadow", "Bramble Bend", "Hollow Rock", "Mossy Steps", "Bee Hive",
-	"Briar Patch", "Foxglove Hill", "Lantern Tree", "Wisp Walk", "Bluebell Pond",
-	"Stoneward", "Petal Pass", "Garden Gate", "Sunken Shrine", "Brittle Bridge",
-	"Verdant Wall", "Foxden", "Old Belfry", "Apothecary", "Mistward",
-	"Bone Garden", "Witchwood", "Marigold Path", "Singing Stones", "Last Lantern",
-	"Iron Vines", "Skybloom", "Throne Steps", "Antechamber", "The Corrupter",
+	"Sunny Meadow", "Bramble Bend", "Hollow Rock", "Mossy Steps", "The Corrupter",
 ]
 
 func stage_name_for(stage: int) -> String:

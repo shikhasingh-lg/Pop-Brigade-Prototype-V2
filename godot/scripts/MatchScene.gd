@@ -55,7 +55,9 @@ var intermission_preview: Label
 var intermission_countdown_bar: ColorRect
 var intermission_countdown_bg: ColorRect
 var _intermission_elapsed: float = 0.0
-var _pre_run_active: bool = false      # pre-wave-1 countdown overlay
+var _pre_run_active: bool = false      # legacy flag, kept for countdown-bar branch
+var _pre_wave_grace_t: float = 0.0     # seconds remaining before enemy_lane.begin_wave fires
+var pre_wave_label: Label = null       # in-scene non-blocking "WAVE 1 IN N" countdown
 var _gate_field_cleared: bool = false  # fade_clear_all already fired this wave
 var _stall_timer: float = 0.0
 const STALL_GRACE_SEC: float = 1.5
@@ -92,12 +94,11 @@ func _ready() -> void:
 	RunState.intermission_ended.connect(_on_intermission_ended)
 	RunState.run_ended.connect(_on_run_ended)
 
-	# 5-second "get ready" countdown before wave 1 starts. Reuses the existing
-	# intermission overlay; _process ticks _intermission_elapsed while
-	# _pre_run_active is true.
-	_show_pre_run_overlay()
-	await get_tree().create_timer(GameConfig.intermission_duration_sec).timeout
-	_hide_pre_run_overlay()
+	# Drop straight into the match. Gate seeds immediately so the player can
+	# shoot; enemy_lane.begin_wave is deferred for `pre_run_countdown_sec` on
+	# wave 0 so they get a free shooting window before the first telegraph.
+	# An in-scene countdown label (non-blocking) shows the remaining seconds.
+	_build_pre_wave_countdown_label()
 	RunState.start_run()
 
 func _paint_background() -> void:
@@ -449,8 +450,7 @@ func _refresh_hud() -> void:
 
 	# Moves: prominent counter, turns red at ≤1 per spec.
 	if hud_moves_label != null:
-		var wave_idx: int = clamp(RunState.wave_index, 0, GameConfig.moves_per_wave.size() - 1)
-		var moves_total: int = GameConfig.moves_per_wave[wave_idx]
+		var moves_total: int = GameConfig.moves_for_wave(RunState.wave_index)
 		hud_moves_label.text = "MOVES  %d / %d" % [RunState.moves_remaining, moves_total]
 		if RunState.moves_remaining <= 1:
 			hud_moves_label.add_theme_color_override("font_color", Color(1, 0.30, 0.30, 1))
@@ -479,12 +479,20 @@ func _refresh_hud() -> void:
 
 func _on_wave_changed(_idx: int) -> void:
 	gate.seed_wave(RunState.wave_index)
-	enemy_lane.begin_wave(RunState.wave_index)
+	# Wave 0 gets a non-blocking "shoot freely" grace window before enemies start
+	# telegraphing. All other waves begin enemy spawning immediately (the
+	# intermission overlay already gives a planning beat).
+	if RunState.wave_index == 0:
+		_pre_wave_grace_t = GameConfig.pre_run_countdown_sec
+		_show_pre_wave_label()
+	else:
+		_pre_wave_grace_t = 0.0
+		enemy_lane.begin_wave(RunState.wave_index)
 	_wave_start_time = Time.get_ticks_msec() / 1000.0
 	_moves_used_this_wave = 0
 	_gate_field_cleared = false
 	Telemetry.wave_start(RunState.wave_index,
-		{"rows": GameConfig.gate_seed_rows_per_wave[RunState.wave_index]},
+		{"rows": GameConfig.seed_rows_for_wave(RunState.wave_index)},
 		RunState.moves_remaining)
 	_refresh_hud()
 
@@ -543,9 +551,48 @@ func _on_intermission_ended() -> void:
 	if intermission_overlay != null:
 		intermission_overlay.visible = false
 
-# Pre-wave-1 countdown — reuses the intermission overlay but is driven by a
-# separate flag because RunState.intermission_active is reserved for between
-# already-played waves.
+# ─── Pre-wave-1 in-scene countdown ────────────────────────────────────────
+# Non-blocking label hovering above the lane that ticks down "WAVE 1 IN N".
+# Player can shoot, aim, pop bubbles during the entire countdown.
+
+func _build_pre_wave_countdown_label() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 45
+	add_child(layer)
+	pre_wave_label = Label.new()
+	pre_wave_label.add_theme_font_size_override("font_size", 44)
+	pre_wave_label.add_theme_color_override("font_color", Color(1, 0.95, 0.55, 1))
+	pre_wave_label.add_theme_color_override("font_outline_color", Color(0.10, 0.13, 0.20, 0.95))
+	pre_wave_label.add_theme_constant_override("outline_size", 8)
+	pre_wave_label.position = Vector2(0, _vp.y * 0.13)
+	pre_wave_label.size = Vector2(_vp.x, 64)
+	pre_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pre_wave_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pre_wave_label.visible = false
+	layer.add_child(pre_wave_label)
+
+func _show_pre_wave_label() -> void:
+	if pre_wave_label == null:
+		return
+	pre_wave_label.visible = true
+	_refresh_pre_wave_label()
+
+func _hide_pre_wave_label() -> void:
+	if pre_wave_label != null:
+		pre_wave_label.visible = false
+
+func _refresh_pre_wave_label() -> void:
+	if pre_wave_label == null or not pre_wave_label.visible:
+		return
+	var secs: int = int(ceil(max(_pre_wave_grace_t, 0.0)))
+	if secs <= 0:
+		pre_wave_label.text = "WAVE 1 — GO!"
+		pre_wave_label.add_theme_color_override("font_color", Color(0.95, 0.55, 0.40, 1))
+	else:
+		pre_wave_label.text = "WAVE 1 IN %d" % secs
+
+# Legacy pre-run overlay (no longer called in normal flow). Kept so any external
+# caller still resolves.
 func _show_pre_run_overlay() -> void:
 	if intermission_overlay == null:
 		return
@@ -564,10 +611,10 @@ func _hide_pre_run_overlay() -> void:
 func _build_preview_text(to_wave: int) -> String:
 	if to_wave < 0 or to_wave >= GameConfig.num_waves:
 		return ""
-	var moves: int = GameConfig.moves_per_wave[to_wave]
-	var rows: int = GameConfig.gate_seed_rows_per_wave[to_wave]
+	var moves: int = GameConfig.moves_for_wave(to_wave)
+	var rows: int = GameConfig.seed_rows_for_wave(to_wave)
 	var heroes: int = GameConfig.hero_bubble_count_for_wave(to_wave)
-	var totals: Dictionary = GameConfig.SPAWN_TOTALS[to_wave]
+	var totals: Dictionary = GameConfig.spawn_totals_for_wave(to_wave)
 	var parts: Array[String] = []
 	for c in ["RED", "BLUE", "YELLOW"]:
 		if totals.has(c) and int(totals[c]) > 0:
@@ -624,6 +671,17 @@ func _process(dt: float) -> void:
 	if (RunState.intermission_active or _pre_run_active) and intermission_overlay != null and intermission_overlay.visible:
 		_intermission_elapsed += dt
 		_refresh_countdown_bar()
+	# Pre-wave-1 grace tick: count down, then fire enemy_lane.begin_wave once.
+	if _pre_wave_grace_t > 0.0:
+		_pre_wave_grace_t -= dt
+		_refresh_pre_wave_label()
+		if _pre_wave_grace_t <= 0.0:
+			_pre_wave_grace_t = 0.0
+			enemy_lane.begin_wave(RunState.wave_index)
+			# Quick "GO" flash then hide.
+			_refresh_pre_wave_label()
+			await get_tree().create_timer(0.8).timeout
+			_hide_pre_wave_label()
 	_check_stall_loss(dt)
 	if active_projectile == null:
 		return
@@ -723,7 +781,8 @@ func _build_intermission_overlay() -> void:
 func _refresh_countdown_bar() -> void:
 	if intermission_countdown_bar == null or intermission_countdown_bg == null:
 		return
-	var dur: float = max(GameConfig.intermission_duration_sec, 0.01)
+	var base_dur: float = GameConfig.pre_run_countdown_sec if _pre_run_active else GameConfig.intermission_duration_sec
+	var dur: float = max(base_dur, 0.01)
 	var pct: float = clamp(1.0 - (_intermission_elapsed / dur), 0.0, 1.0)
 	intermission_countdown_bar.size = Vector2(intermission_countdown_bg.size.x * pct, intermission_countdown_bg.size.y)
 
