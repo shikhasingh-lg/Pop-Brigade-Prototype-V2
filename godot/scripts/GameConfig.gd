@@ -208,7 +208,9 @@ func purple_col_radius_for_tier(t: int) -> int: return purple_col_radius_by_tier
 
 # Boss + The Corrupter (boss-design.md §2, §4)
 @export var boss_hp: int = 1000
-@export var boss_lane_cell: int = 5                          # fixed lane cell (of 20)
+@export var boss_lane_cell: int = 5                          # fixed lane cell (of 20) — spawn position
+@export var boss_walk_speed_mult: float = 0.20               # vs lane_traversal_sec_for_red; ~30s full-lane → ~20s from spawn
+@export var boss_base_damage: int = 60                       # base HP damage if Corrupter reaches the tower (>50% of 100)
 @export var boss_telegraph_sec: float = 2.0
 @export var boss_ability_interval_sec: float = 8.0
 @export var boss_low_hp_threshold: float = 0.25

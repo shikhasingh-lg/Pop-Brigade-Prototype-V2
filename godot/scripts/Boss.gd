@@ -40,9 +40,9 @@ func init_boss(cfg: Dictionary) -> void:
 
 	max_hp = float(GameConfig.boss_hp)
 	hp = max_hp
-	color_speed_mult = 0.0
-	color_dmg_base = 0
-	color_dmg_hero = 0
+	color_speed_mult = GameConfig.boss_walk_speed_mult
+	color_dmg_base = GameConfig.boss_base_damage
+	color_dmg_hero = 0   # Corrupter doesn't melee heroes — it walks past them straight to the tower
 
 	# Park the boss on the lane at cell 5 (of 20) → lane_progress = 5/20 = 0.25.
 	state = State.LANE
@@ -59,11 +59,18 @@ func init_boss(cfg: Dictionary) -> void:
 
 func _process(dt: float) -> void:
 	_tick_statuses(dt)
+	if _hit_flash_t > 0.0:
+		_hit_flash_t = max(0.0, _hit_flash_t - dt)
 	if state == State.DEAD:
 		return
-	# Boss is stunned/frozen → ability progress also halts (consistent with enemies).
+	# Boss is stunned/frozen → ability + walk both halt (consistent with enemies).
 	var spd_mult: float = effective_speed_mult()
-	# Stay parked. Small bob for life.
+	if spd_mult > 0.0:
+		var step: float = (color_speed_mult * spd_mult * dt) / GameConfig.lane_traversal_sec_for_red
+		lane_progress = clamp(lane_progress + step, 0.0, 1.0)
+		if lane_progress >= 1.0:
+			_on_reach_tower()
+			return
 	_update_boss_pos()
 	queue_redraw()
 	if spd_mult <= 0.0:
@@ -119,6 +126,16 @@ func _update_boss_pos() -> void:
 	scale = Vector2(1.3, 1.3)
 
 func _die() -> void:
+	state = State.DEAD
+	emit_signal("boss_died", self)
+	emit_signal("died_signal", self)
+	queue_free()
+
+func _on_reach_tower() -> void:
+	# Corrupter slams the tower for color_dmg_base. EnemyLane forwards this to
+	# the base HP via enemy_reached_base. Then mark dead so the wave ends.
+	Telemetry.log_event("boss_reached_tower", {"dmg": color_dmg_base})
+	emit_signal("reached_cannon", self)
 	state = State.DEAD
 	emit_signal("boss_died", self)
 	emit_signal("died_signal", self)
