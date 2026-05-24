@@ -81,6 +81,17 @@ var engage_dps_accum: float = 0.0
 # Hit-feel: per-hit white flash counter (ticks down in _process).
 var _hit_flash_t: float = 0.0
 
+# Procedural "alive" animation (option A — no spritesheet). Phase clock ticks
+# while LANE / ENGAGED; consumed by _draw() to bob, waddle, and tilt the sprite.
+# Per-variant feel: bob freq/amplitude, waddle amplitude, tilt amplitude.
+# WALKER = mid stride, RUNNER = fast + forward lean, BRUTE = slow heavy thud.
+var _anim_t: float = 0.0
+const _VARIANT_ANIM: Dictionary = {
+	"WALKER": {"bob_hz": 1.5, "bob_px": 2.0, "waddle_px": 1.0, "tilt_deg": 1.5, "lean_deg": 0.0},
+	"RUNNER": {"bob_hz": 3.0, "bob_px": 3.0, "waddle_px": 2.0, "tilt_deg": 3.0, "lean_deg": -3.0},
+	"BRUTE":  {"bob_hz": 0.8, "bob_px": 4.0, "waddle_px": 0.0, "tilt_deg": 1.0, "lean_deg": 0.0},
+}
+
 # Refs
 var gate: Gate
 var hero_row: HeroRow
@@ -208,12 +219,15 @@ func _process(dt: float) -> void:
 			var step: float = (color_speed_mult * spd_mult * dt) / GameConfig.lane_traversal_sec_for_red
 			lane_progress = clamp(lane_progress + step, 0.0, 1.0)
 			_update_lane_pos()
+			_anim_t += dt * spd_mult
 			queue_redraw()
 			if lane_progress >= 1.0:
 				_on_reach_hero_row()
 		State.ENGAGED:
 			if spd_mult <= 0.0:
 				return
+			_anim_t += dt * spd_mult
+			queue_redraw()
 			_tick_engagement(dt * spd_mult)
 		State.DEAD:
 			pass
@@ -315,6 +329,16 @@ func _draw() -> void:
 		return
 
 	_draw_ground_shadow(1.0)
+
+	# Procedural "alive" tweens — shadow drawn first (stays planted), then sprite
+	# / hit-flash / HP bar / status icons drawn inside a bob+waddle+tilt transform.
+	var feel: Dictionary = _VARIANT_ANIM.get(variant, _VARIANT_ANIM["WALKER"])
+	var phase: float = _anim_t * float(feel.bob_hz) * TAU
+	var bob_y: float = -abs(sin(phase)) * float(feel.bob_px)   # always upward (head bounce)
+	var waddle_x: float = sin(phase * 0.5) * float(feel.waddle_px)
+	var tilt_rad: float = deg_to_rad(sin(phase * 0.5) * float(feel.tilt_deg) + float(feel.lean_deg))
+	draw_set_transform(Vector2(waddle_x, bob_y), tilt_rad, Vector2.ONE)
+
 	if tex != null:
 		draw_texture_rect(tex, draw_rect2, false, Color(dim, dim, dim, 1.0))
 		# Hit-flash: redraw the sprite as pure white over the top with alpha
@@ -332,6 +356,7 @@ func _draw() -> void:
 		Color(0.35, 0.85, 0.35) if frac > 0.5 else Color(0.95, 0.7, 0.25))
 
 	_draw_status_icons()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 const STATUS_ICON_PX: float = 18.0   # on-screen size; sheet art is 247² so this is a heavy downscale (fine).
 const STATUS_ICON_PAD: float = 4.0   # horizontal gap between icons.

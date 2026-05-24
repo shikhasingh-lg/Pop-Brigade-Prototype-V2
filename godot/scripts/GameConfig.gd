@@ -82,7 +82,13 @@ const ENEMY_VARIANTS: Dictionary = {
 	"WALKER":   {"hp_mult": 1.0, "speed_mult": 1.0, "dmg_mult": 1.0, "scale": 1.0},
 	"RUNNER":   {"hp_mult": 0.7, "speed_mult": 1.6, "dmg_mult": 1.0, "scale": 0.9},
 	"BRUTE":    {"hp_mult": 2.0, "speed_mult": 0.7, "dmg_mult": 1.5, "scale": 1.4},
+	"MINIBOSS": {"hp_mult": 3.0, "speed_mult": 1.0, "dmg_mult": 2.0, "scale": 1.6},
 }
+
+# Mini-boss wave (combat-design.md §3.6) — wave 5 of every stage spawns a solo
+# YELLOW miniboss-variant enemy. For Stage 1 (5 waves) this IS the final wave;
+# for stages 2+ the Corrupter still spawns on the actual last wave.
+@export var miniboss_wave_idx: int = 4   # 0-based → wave 5
 
 # Per-wave variant probability mix (sums to 1).
 # Spec gates: Runner wave 3+ (idx>=2), Brute wave 4+ (idx>=3).
@@ -142,35 +148,35 @@ func variant_mix_for_wave(idx: int) -> Dictionary:
 
 # Ice Mage (BLUE) — lob + AoE splash + slow.
 @export var blue_fire_rate_sec: float = 1.0
-@export var blue_dmg_mult: float = 0.6
-@export var blue_reach_rows_by_tier: Array[int] = [0, 8, 9, 10]
-@export var blue_col_radius_by_tier: Array[int] = [0, 1, 2, 2]
+@export var blue_dmg_mult: float = 0.5
+@export var blue_reach_rows_by_tier: Array[int] = [0, 8, 10, 12]
+@export var blue_col_radius_by_tier: Array[int] = [0, 5, 5, 5]   # full-board horizontal
 @export var blue_aoe_radius_px: float = 90.0           # ~1.5 gate cells (CELL=60)
 @export var blue_slow_pct: float = 0.30                # 30% movement slow
 @export var blue_slow_duration_sec: float = 2.0
 
 # Archer (YELLOW) — straight cone snipe + execute bonus.
 @export var yellow_fire_rate_sec: float = 0.8
-@export var yellow_dmg_mult: float = 1.1
+@export var yellow_dmg_mult: float = 0.85
 @export var yellow_reach_rows_by_tier: Array[int] = [0, 12, 14, 16]
-@export var yellow_col_radius_by_tier: Array[int] = [0, 2, 2, 3]
+@export var yellow_col_radius_by_tier: Array[int] = [0, 5, 5, 5]   # full-board horizontal
 @export var yellow_execute_threshold: float = 0.30
 @export var yellow_execute_bonus: float = 0.50
 
 # Druid (GREEN) — single-target + chain heal.
 @export var green_fire_rate_sec: float = 0.7
-@export var green_dmg_mult: float = 0.75
-@export var green_reach_rows_by_tier: Array[int] = [0, 8, 9, 10]
-@export var green_col_radius_by_tier: Array[int] = [0, 1, 1, 2]
+@export var green_dmg_mult: float = 0.6
+@export var green_reach_rows_by_tier: Array[int] = [0, 6, 8, 10]
+@export var green_col_radius_by_tier: Array[int] = [0, 5, 5, 5]   # full-board horizontal
 @export var green_chain_heal_amount: int = 5
 @export var green_chain_heal_targets: int = 2
 @export var green_heal_per_hero_cap_per_sec: int = 15
 
 # Wizard (PURPLE) — cone snipe + arcane burst every Nth hit.
 @export var purple_fire_rate_sec: float = 1.4
-@export var purple_dmg_mult: float = 2.0
+@export var purple_dmg_mult: float = 1.5
 @export var purple_reach_rows_by_tier: Array[int] = [0, 10, 12, 14]
-@export var purple_col_radius_by_tier: Array[int] = [0, 1, 2, 2]
+@export var purple_col_radius_by_tier: Array[int] = [0, 5, 5, 5]   # full-board horizontal
 @export var purple_burst_every_n_hits: int = 5
 @export var purple_aoe_radius_px: float = 90.0         # ~1.5 gate cells
 

@@ -24,6 +24,10 @@ var boss: Boss = null
 var is_boss_wave: bool = false
 var next_minion_t: float = -1.0   # absolute wave_clock for next minion spawn (-1 = disabled)
 
+# Mini-boss wave (combat-design.md §3.6) — wave 5 of every stage.
+var miniboss: Enemy = null
+var is_miniboss_wave: bool = false
+
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -38,8 +42,15 @@ func configure(g: Gate, lane_top: float, lane_bot: float, post_target: float, co
 
 func begin_wave(idx: int) -> void:
 	_clear_enemies()
-	is_boss_wave = (idx == GameConfig.num_waves - 1)
-	if is_boss_wave:
+	# Precedence: wave 5 = miniboss (even on Stage 1 where it's also the last wave),
+	# otherwise last wave = Corrupter boss.
+	is_miniboss_wave = (idx == GameConfig.miniboss_wave_idx)
+	is_boss_wave = (not is_miniboss_wave) and (idx == GameConfig.num_waves - 1)
+	if is_miniboss_wave:
+		spawn_queue.clear()
+		_spawn_miniboss()
+		next_minion_t = -1.0
+	elif is_boss_wave:
 		spawn_queue.clear()
 		_spawn_boss()
 		next_minion_t = GameConfig.corrupter_minion_first_spawn_delay_sec
@@ -81,6 +92,12 @@ func _process(dt: float) -> void:
 	if not wave_active:
 		return
 	wave_clock += dt
+	if is_miniboss_wave:
+		# Solo miniboss — wave ends when it dies (or reaches the cannon).
+		if miniboss == null or not is_instance_valid(miniboss) or miniboss.state == Enemy.State.DEAD:
+			wave_active = false
+			emit_signal("wave_cleared")
+		return
 	if is_boss_wave:
 		# Drip-feed minions every corrupter_minion_spawn_interval_sec, starting
 		# at next_minion_t. Stop when boss dies (wave end handled below).
@@ -121,6 +138,28 @@ func _on_boss_died(_b: Boss) -> void:
 	Telemetry.log_event("boss_died", {"name": "Corrupter"})
 	boss = null
 	next_minion_t = -1.0
+
+func _spawn_miniboss() -> void:
+	var col: int = GameConfig.gate_columns / 2
+	miniboss = Enemy.new()
+	add_child(miniboss)
+	miniboss.init_enemy({
+		"color": "YELLOW",
+		"variant": "MINIBOSS",
+		"column": col,
+		"gate": gate_ref,
+		"hero_row": hero_row_ref,
+		"wave_idx": RunState.wave_index,
+		"lane_top_y": lane_top_y,
+		"lane_bottom_y": lane_bottom_y,
+		"post_breach_target_y": post_breach_target_y,
+		"column_x_func": column_x_func,
+	})
+	miniboss.reached_cannon.connect(_on_enemy_reached_cannon)
+	miniboss.died_signal.connect(_on_enemy_died)
+	miniboss.breached_signal.connect(_on_enemy_breached)
+	enemies.append(miniboss)
+	Telemetry.log_event("miniboss_spawn", {"col": col, "hp": miniboss.max_hp})
 
 func _spawn(color: String, variant: String = "WALKER") -> void:
 	var col: int = _pick_spawn_column()
@@ -182,4 +221,6 @@ func _clear_enemies() -> void:
 	wave_active = false
 	boss = null
 	is_boss_wave = false
+	miniboss = null
+	is_miniboss_wave = false
 	next_minion_t = -1.0
