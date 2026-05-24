@@ -9,6 +9,13 @@ class_name Boss
 
 const BOSS_SIZE: float = 64.0
 const BOSS_HP_BAR_W: float = 140.0
+const BOSS_SPRITE_PATH: String = "res://assets/enemies/boss_corrupter.png"
+const BOSS_SPRITE_DRAW_SIZE: float = 220.0   # rendered px before node scale (~1.3); art has presence
+static var _boss_texture: Texture2D = null
+static func _get_boss_texture() -> Texture2D:
+	if _boss_texture == null:
+		_boss_texture = load(BOSS_SPRITE_PATH) as Texture2D
+	return _boss_texture
 
 signal corruption_telegraph(col: int, remaining_sec: float)
 signal corruption_fired(col: int)
@@ -120,15 +127,25 @@ func _die() -> void:
 # ─── Draw ──────────────────────────────────────────────────────────────────
 
 func _draw() -> void:
-	# Body: oozing purple blob.
+	# Purple aura behind the sprite — keeps the menacing glow even with art.
 	var fill: Color = Bubble.COLORS.get("PURPLE", Color(0.62, 0.36, 0.86))
 	var aura: Color = Color(fill.r, fill.g, fill.b, 0.35)
 	draw_circle(Vector2.ZERO, BOSS_SIZE + 8.0, aura)
-	draw_circle(Vector2.ZERO, BOSS_SIZE, fill)
-	draw_arc(Vector2.ZERO, BOSS_SIZE, 0, TAU, 48, Color(0, 0, 0, 0.8), 2.0, true)
-	# Eye.
-	draw_circle(Vector2(0, -8), 14.0, Color(0.96, 0.92, 0.45))
-	draw_circle(Vector2(0, -8), 6.0, Color(0.10, 0.08, 0.18))
+	# Body: actual Corrupter art (fallback to procedural blob if missing).
+	var tex: Texture2D = _get_boss_texture()
+	if tex != null:
+		var r := Rect2(-BOSS_SPRITE_DRAW_SIZE * 0.5, -BOSS_SPRITE_DRAW_SIZE * 0.5,
+			BOSS_SPRITE_DRAW_SIZE, BOSS_SPRITE_DRAW_SIZE)
+		draw_texture_rect(tex, r, false)
+		# Hit flash — reuse the inherited counter from Enemy.gd.
+		if _hit_flash_t > 0.0:
+			var flash_a: float = clamp(_hit_flash_t / GameConfig.hit_flash_duration_sec, 0.0, 1.0)
+			draw_texture_rect(tex, r, false, Color(1.0, 1.0, 1.0, flash_a))
+	else:
+		draw_circle(Vector2.ZERO, BOSS_SIZE, fill)
+		draw_arc(Vector2.ZERO, BOSS_SIZE, 0, TAU, 48, Color(0, 0, 0, 0.8), 2.0, true)
+		draw_circle(Vector2(0, -8), 14.0, Color(0.96, 0.92, 0.45))
+		draw_circle(Vector2(0, -8), 6.0, Color(0.10, 0.08, 0.18))
 
 	# HP bar above.
 	var frac: float = clamp(hp / max_hp, 0.0, 1.0)
